@@ -78,7 +78,7 @@ class Krb5Conan(ConanFile):
         "dll_sign": True,
         "fPIC": True
     }
-    exports_sources = ["src/*"]
+    exports_sources = ["src/*", "Findkrb5.cmake"]
     no_copy_source = False
     build_policy = "missing"
 
@@ -142,6 +142,8 @@ class Krb5Conan(ConanFile):
         return self._autotools
         
     def package(self):
+        self.copy("Findkrb5.cmake", src=".", dst=".")
+
         env_run = RunEnvironment(self)
         with tools.environment_append(env_run.vars):
             with tools.chdir("src"):
