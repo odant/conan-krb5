@@ -63,7 +63,7 @@ def generateVersionH(originalVersion, current_time=datetime.now()):
     
 class Krb5Conan(ConanFile):
     name = "krb5"
-    version = "1.22.0-beta1+1"
+    version = "1.22.0-beta1+2"
     description = "kerberos 5 library"
     topics = ("krb5", "kerberos")
     url = "https://github.com/krb5/krb5"
