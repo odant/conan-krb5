@@ -136,8 +136,11 @@ class Krb5Conan(ConanFile):
 
         if self.options.get_safe("fPIC"):
             self._autotools.fpic = True
-
-        self._autotools.configure()
+        
+        params = [
+            "--with-system-verto=no"       
+        ]
+        self._autotools.configure(args=params)
 
         return self._autotools
         
