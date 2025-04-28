@@ -160,7 +160,7 @@ cmd_lookup(char *name)
 #define ARG_VAL (--argc > 0 ? (koptarg = *(++argv)) : (char *)(usage(), NULL))
 
 char **db5util_db_args = NULL;
-int    db5util_db_args_size = 0;
+size_t db5util_db_args_size = 0;
 
 static void
 extended_com_err_fn(const char *myprog, errcode_t code, const char *fmt,
@@ -522,7 +522,7 @@ add_random_key(int argc, char **argv)
 
     int free_keysalts;
     char *me = progname;
-    char *ks_str = NULL;
+    char *ks_str = "";
     char *pr_str;
     krb5_keyblock *tmp_mkey;
 
@@ -600,6 +600,9 @@ add_random_key(int argc, char **argv)
         exit_status++;
         return;
     }
+
+    dbent->mask |= KADM5_ATTRIBUTES | KADM5_KEY_DATA | KADM5_TL_DATA;
+
     ret = krb5_db_put_principal(util_context, dbent);
     krb5_db_free_principal(util_context, dbent);
     if (ret) {

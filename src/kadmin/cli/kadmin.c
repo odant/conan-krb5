@@ -298,7 +298,7 @@ kadmin_startup(int argc, char *argv[], char **request_out, char ***args_out)
     krb5_principal princ;
     kadm5_config_params params;
     char **db_args = NULL;
-    int db_args_size = 0;
+    size_t db_args_size = 0;
     char *db_name = NULL;
     char *svcname, *realm;
 
@@ -774,6 +774,55 @@ cleanup:
     free(ocanon);
 }
 
+void
+kadmin_addalias(int argc, char *argv[], int sci_idx, void *info_ptr)
+{
+    kadm5_ret_t retval;
+    krb5_principal alias = NULL, target = NULL;
+    char *acanon = NULL, *tcanon = NULL;
+
+    if (argc != 3) {
+        error(_("usage: add_alias alias_principal target_principal\n"));
+        return;
+    }
+    retval = kadmin_parse_name(argv[1], &alias);
+    if (retval) {
+        com_err("add_alias", retval, _("while parsing alias principal name"));
+        goto cleanup;
+    }
+    retval = kadmin_parse_name(argv[2], &target);
+    if (retval) {
+        com_err("add_alias", retval, _("while parsing target principal name"));
+        goto cleanup;
+    }
+    retval = krb5_unparse_name(context, alias, &acanon);
+    if (retval) {
+        com_err("add_alias", retval,
+                _("while canonicalizing alias principal"));
+        goto cleanup;
+    }
+    retval = krb5_unparse_name(context, target, &tcanon);
+    if (retval) {
+        com_err("add_alias", retval,
+                _("while canonicalizing target principal"));
+        goto cleanup;
+    }
+    retval = kadm5_create_alias(handle, alias, target);
+    if (retval) {
+        com_err("add_alias", retval,
+                _("while aliasing principal \"%s\" to \"%s\""),
+                acanon, tcanon);
+        goto cleanup;
+    }
+    info(_("Principal \"%s\" aliased to \"%s\".\n"), acanon, tcanon);
+
+cleanup:
+    krb5_free_principal(context, alias);
+    krb5_free_principal(context, target);
+    free(acanon);
+    free(tcanon);
+}
+
 static void
 cpw_usage(const char *str)
 {
@@ -795,7 +844,7 @@ kadmin_cpw(int argc, char *argv[], int sci_idx, void *info_ptr)
     krb5_key_salt_tuple *ks_tuple = NULL;
     krb5_principal princ = NULL;
     char **db_args = NULL;
-    int db_args_size = 0;
+    size_t db_args_size = 0;
 
     if (argc < 1) {
         cpw_usage(NULL);

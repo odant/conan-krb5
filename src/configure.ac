@@ -466,7 +466,7 @@ AC_CONFIG_HEADERS(include/autoconf.h, [echo timestamp > include/autoconf.stamp])
 AC_C_CONST
 AC_HEADER_DIRENT
 AC_FUNC_STRERROR_R
-AC_CHECK_FUNCS(strdup setvbuf seteuid setresuid setreuid setegid setresgid setregid setsid flock fchmod chmod strptime geteuid setenv unsetenv getenv gmtime_r localtime_r bswap16 bswap64 mkstemp getusershell access getcwd srand48 srand srandom stat strchr strerror timegm explicit_bzero explicit_memset getresuid getresgid)
+AC_CHECK_FUNCS(strdup setvbuf seteuid setresuid setreuid setegid setresgid setregid setsid flock fchmod chmod strptime geteuid setenv unsetenv getenv gmtime_r localtime_r bswap16 bswap64 mkstemp getusershell access getcwd srand48 srand srandom stat strchr strerror timegm explicit_bzero explicit_memset getresuid getresgid getentropy)
 
 AC_CHECK_FUNC(mkstemp,
 [MKSTEMP_ST_OBJ=
@@ -490,18 +490,9 @@ AC_SUBST(GETTIMEOFDAY_ST_OBJ)
 AC_SUBST(EXTRA_SUPPORT_SYMS)
 
 DECLARE_SYS_ERRLIST
-AC_CHECK_HEADERS(unistd.h paths.h regex.h regexpr.h fcntl.h memory.h ifaddrs.h sys/filio.h byteswap.h machine/endian.h machine/byte_order.h sys/bswap.h endian.h pwd.h arpa/inet.h alloca.h dlfcn.h limits.h)
-AC_CHECK_HEADER(regexp.h, [], [],
-[#define INIT char *sp = instring;
-#define GETC() (*sp++)
-#define PEEKC() (*sp)
-#define UNGETC(c) (--sp)
-#define RETURN(c) return(c)
-#define ERROR(c)
-])
+AC_CHECK_HEADERS(unistd.h paths.h fcntl.h memory.h ifaddrs.h sys/filio.h byteswap.h machine/endian.h machine/byte_order.h sys/bswap.h endian.h pwd.h arpa/inet.h alloca.h dlfcn.h limits.h sys/random.h)
 AC_CHECK_MEMBERS([struct stat.st_mtimensec,struct stat.st_mtimespec.tv_nsec,struct stat.st_mtim.tv_nsec],,,[#include <sys/types.h>
 #include <sys/stat.h>])
-KRB5_AC_REGEX_FUNCS
 AC_TYPE_OFF_T
 
 # Fancy caching of perror result...

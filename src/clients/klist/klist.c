@@ -681,7 +681,7 @@ show_credential(krb5_creds *cred, const char *defname)
     krb5_error_code ret;
     krb5_ticket *tkt = NULL;
     char *name = NULL, *sname = NULL, *tktsname, *flags;
-    int extra_field = 0, ccol = 0, i;
+    int extra_field = 0, ccol = 0, i, r;
     krb5_boolean is_config = krb5_is_config_principal(context, cred->server);
 
     ret = krb5_unparse_name(context, cred->client, &name);
@@ -711,11 +711,11 @@ show_credential(krb5_creds *cred, const char *defname)
         fputs("config: ", stdout);
         ccol = 8;
         for (i = 1; i < cred->server->length; i++) {
-            ccol += printf("%s%.*s%s",
-                           i > 1 ? "(" : "",
-                           (int)cred->server->data[i].length,
-                           cred->server->data[i].data,
-                           i > 1 ? ")" : "");
+            r = printf("%s%.*s%s", i > 1 ? "(" : "",
+                       (int)cred->server->data[i].length,
+                       cred->server->data[i].data, i > 1 ? ")" : "");
+            if (r >= 0)
+                ccol += r;
         }
         fputs(" = ", stdout);
         ccol += 3;
@@ -832,8 +832,9 @@ one_addr(krb5_address *a)
     struct sockaddr_storage ss;
     struct sockaddr_in *sinp;
     struct sockaddr_in6 *sin6p;
-    int err;
+    int err, i;
     char namebuf[NI_MAXHOST];
+    const uint8_t *p;
 
     memset(&ss, 0, sizeof(ss));
 
@@ -858,6 +859,16 @@ one_addr(krb5_address *a)
         sin6p->sin6_family = AF_INET6;
         memcpy(&sin6p->sin6_addr, a->contents, 16);
         break;
+    case ADDRTYPE_NETBIOS:
+        if (a->length != 16) {
+            printf(_("broken address (type %d length %d)"),
+                   a->addrtype, a->length);
+            return;
+        }
+        p = a->contents;
+        for (i = 0; i < 15 && p[i] != '\0' && p[i] != ' '; i++)
+            putchar(p[i]);
+        return;
     default:
         printf(_("unknown addrtype %d"), a->addrtype);
         return;

@@ -73,7 +73,7 @@ pkinit_find_realm_context(krb5_context context,
 static void
 free_realm_contexts(krb5_context context, pkinit_kdc_context *realm_contexts)
 {
-    int i;
+    size_t i;
 
     if (realm_contexts == NULL)
         return;
@@ -86,7 +86,7 @@ free_realm_contexts(krb5_context context, pkinit_kdc_context *realm_contexts)
 static void
 free_certauth_handles(krb5_context context, certauth_handle *list)
 {
-    int i;
+    size_t i;
 
     if (list == NULL)
         return;
@@ -181,7 +181,7 @@ verify_client_san(krb5_context context,
     krb5_principal *princs = NULL, upn;
     krb5_boolean match;
     char **upns = NULL;
-    int i;
+    size_t i;
 #ifdef DEBUG_SAN_INFO
     char *client_string = NULL, *san_string;
 #endif
@@ -428,11 +428,12 @@ pkinit_server_verify_padata(krb5_context context,
     krb5_data authp_data = {0, 0, NULL}, krb5_authz = {0, 0, NULL};
     krb5_pa_pk_as_req *reqp = NULL;
     krb5_auth_pack *auth_pack = NULL;
+    krb5_pk_authenticator *pka;
     pkinit_kdc_context plgctx = NULL;
     pkinit_kdc_req_context reqctx = NULL;
     krb5_checksum cksum = {0, 0, 0, NULL};
     krb5_data *der_req = NULL;
-    krb5_data k5data, *ftoken;
+    krb5_data k5data;
     int is_signed = 1;
     krb5_pa_data **e_data = NULL;
     krb5_kdcpreauth_modreq modreq = NULL;
@@ -524,8 +525,9 @@ pkinit_server_verify_padata(krb5_context context,
         pkiDebug("failed to decode krb5_auth_pack\n");
         goto cleanup;
     }
+    pka = &auth_pack->pkAuthenticator;
 
-    retval = krb5_check_clockskew(context, auth_pack->pkAuthenticator.ctime);
+    retval = krb5_check_clockskew(context, pka->ctime);
     if (retval)
         goto cleanup;
 
@@ -548,36 +550,14 @@ pkinit_server_verify_padata(krb5_context context,
         goto cleanup;
     }
     der_req = cb->request_body(context, rock);
-    retval = krb5_c_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, der_req,
-                                  &cksum);
-    if (retval) {
-        pkiDebug("unable to calculate AS REQ checksum\n");
-        goto cleanup;
-    }
-    if (cksum.length != auth_pack->pkAuthenticator.paChecksum.length ||
-        k5_bcmp(cksum.contents, auth_pack->pkAuthenticator.paChecksum.contents,
-                cksum.length) != 0) {
-        pkiDebug("failed to match the checksum\n");
-#ifdef DEBUG_CKSUM
-        pkiDebug("calculating checksum on buf size (%d)\n", req_pkt->length);
-        print_buffer(req_pkt->data, req_pkt->length);
-        pkiDebug("received checksum type=%d size=%d ",
-                 auth_pack->pkAuthenticator.paChecksum.checksum_type,
-                 auth_pack->pkAuthenticator.paChecksum.length);
-        print_buffer(auth_pack->pkAuthenticator.paChecksum.contents,
-                     auth_pack->pkAuthenticator.paChecksum.length);
-        pkiDebug("expected checksum type=%d size=%d ",
-                 cksum.checksum_type, cksum.length);
-        print_buffer(cksum.contents, cksum.length);
-#endif
 
-        retval = KRB5KDC_ERR_PA_CHECKSUM_MUST_BE_INCLUDED;
+    retval = crypto_verify_checksums(context, der_req, &pka->paChecksum,
+                                     pka->paChecksum2);
+    if (retval)
         goto cleanup;
-    }
 
-    ftoken = auth_pack->pkAuthenticator.freshnessToken;
-    if (ftoken != NULL) {
-        retval = cb->check_freshness_token(context, rock, ftoken);
+    if (pka->freshnessToken != NULL) {
+        retval = cb->check_freshness_token(context, rock, pka->freshnessToken);
         if (retval)
             goto cleanup;
         valid_freshness_token = TRUE;
@@ -711,7 +691,7 @@ pkinit_pick_kdf_alg(krb5_context context, krb5_data **kdf_list,
     krb5_data *req_oid = NULL;
     const krb5_data *supp_oid = NULL;
     krb5_data *tmp_oid = NULL;
-    int i, j = 0;
+    size_t i, j = 0;
 
     /* if we don't find a match, return NULL value */
     *alg_oid = NULL;
@@ -1068,7 +1048,7 @@ pkinit_find_realm_context(krb5_context context,
                           krb5_kdcpreauth_moddata moddata,
                           krb5_principal princ)
 {
-    int i;
+    size_t i;
     pkinit_kdc_context *realm_contexts;
 
     if (moddata == NULL)
