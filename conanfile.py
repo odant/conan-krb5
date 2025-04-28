@@ -1,7 +1,9 @@
-import os
-from conans import ConanFile, AutoToolsBuildEnvironment, RunEnvironment, tools
-from conans.errors import ConanInvalidConfiguration
+from conan import ConanFile, tools
+from conan.tools.gnu import Autotools, AutotoolsDeps, AutotoolsToolchain 
+from conan.errors import ConanInvalidConfiguration
 from datetime import datetime
+from conan.tools.layout import basic_layout
+import os
 
 def generateVersionH(originalVersion, current_time=datetime.now()):
     coreVersion = originalVersion
@@ -71,95 +73,104 @@ class Krb5Conan(ConanFile):
     license = "MIT"
     settings = "os", "arch", "compiler", "build_type"
     options = {
-        "fPIC": [False, True],
-        "dll_sign": [False, True]
+        "fPIC": [False, True]
     }
     default_options = {
-        "dll_sign": True,
         "fPIC": True
     }
-    exports_sources = ["src/*", "Findkrb5.cmake"]
+    exports_sources = ["src/*"]
     no_copy_source = False
     build_policy = "missing"
-
-    _autotools = None
+    package_type = "shared-library"
+    
+    def layout(self):
+        basic_layout(self, src_folder="src")
 
     def configure(self):
-        if self.settings.os == "Windows":
-            self.options.rm_safe("fPIC")
-        else:
-            self.options.rm_safe("dll_sign")
         # Pure C library
         self.settings.rm_safe("compiler.cppstd")
         self.settings.rm_safe("compiler.libcxx")
 
-    def build_requirements(self):
-        if self.options.get_safe("dll_sign"):
-            self.build_requires("windows_signtool/[~=1.1]@%s/stable" % self.user)
-            
     def requirements(self):
         self.requires("openssl/[>=3.0]@odant/stable")
     
+    def generate(self):
+        benv = tools.env.VirtualBuildEnv(self)
+        benv.generate()
+        renv = tools.env.VirtualRunEnv(self)
+        renv.generate()
+        tc = tools.gnu.AutotoolsToolchain(self)
+        tc.configure_args.extend([
+          "--without-system-verto"
+        ])
+        tc.generate()
+        deps = tools.gnu.AutotoolsDeps(self)
+        deps.generate()
+        
     def build(self):
         #
         self.output.info("--------------Start build--------------")
-        if self.settings.os == "Windows" and self.settings.compiler == "Visual Studio":
-            self.windows_build()
-        else:
-            self.posix_build()
-        self.output.info("--------------Build done---------------")
-    
-    def posix_build(self):
-        with tools.chdir("src"):
-            # autoreconf
-            self.run("{} -fiv".format(tools.get_env("AUTORECONF") or "autoreconf"), win_bash=tools.os_info.is_windows, run_environment=True)
+        # autoreconf
+        with tools.files.chdir(self, self.source_folder):
+            env = tools.env.Environment()
+            self.run("{} -fiv".format(env.vars(self, scope="run").get("AUTORECONF") or "autoreconf"))
             self.run("chmod +x configure")
-            env = {}
-            # run configure with *LD_LIBRARY_PATH env vars it allows to pick up shared openssl
-            env.update(RunEnvironment(self).vars)
-            # clear c++ compiler environment variables
-            env.update({"CXX":"", "CPP":""})
-            self.output.info("Set environment vars: " + repr(env))
-            with tools.environment_append(env):
-                autotools = self._configure_autotools()
-                autotools.make()
-
-
-    def windows_build(self):
-        raise RuntimeError('Not implemented')
-        
-    def _configure_autotools(self):
-        if self._autotools:
-            return self._autotools
-
-        self._autotools = AutoToolsBuildEnvironment(self, win_bash=tools.os_info.is_windows)
-
-        if self.options.get_safe("fPIC"):
-            self._autotools.fpic = True
-        
-        params = [
-            "--with-system-verto=no"       
-        ]
-        self._autotools.configure(args=params)
-
-        return self._autotools
-        
+        autotools = tools.gnu.Autotools(self)
+        autotools.configure()
+        autotools.make()
+        self.output.info("--------------Build done---------------")
+       
     def package(self):
-        self.copy("Findkrb5.cmake", src=".", dst=".")
-
-        env_run = RunEnvironment(self)
-        with tools.environment_append(env_run.vars):
-            with tools.chdir("src"):
-                autotools = self._configure_autotools()
-                autotools.install()
+        autotools = tools.gnu.Autotools(self)
+        autotools.install()
         # remove unused folders
-        tools.rmdir(os.path.join(self.package_folder, "share"))
-        tools.rmdir(os.path.join(self.package_folder, "var"))
-        tools.rmdir(os.path.join(self.package_folder, "lib", "pkgconfig"))
-        tools.rmdir(os.path.join(self.package_folder, "lib", "krb5"))
+        tools.files.rmdir(self, os.path.join(self.package_folder, "share"))
+        tools.files.rmdir(self, os.path.join(self.package_folder, "var"))
+        tools.files.rmdir(self, os.path.join(self.package_folder, "lib", "pkgconfig"))
+        tools.files.rmdir(self, os.path.join(self.package_folder, "lib", "krb5"))
         # generate krb5_version.h
         version_h = generateVersionH(self.version)
-        tools.save(os.path.join(self.package_folder, "include", "krb5_version.h"), version_h)                
+        tools.files.save(self, os.path.join(self.package_folder, "include", "krb5_version.h"), version_h)                
     
     def package_info(self):
-        self.cpp_info.libs = tools.collect_libs(self)
+        self.cpp_info.components["krb5"].libs = ["krb5"]
+        self.cpp_info.components["krb5"].requires = ["k5crypto", "com_err", "krb5support", "openssl::crypto"]
+        if self.settings.os == "Linux":
+            self.cpp_info.components["krb5"].system_libs = ["resolv"]
+
+        self.cpp_info.components["com_err"].libs = ["com_err"]
+        self.cpp_info.components["com_err"].requires = ["krb5support"]
+
+        self.cpp_info.components["gssapi"].libs = ["gssapi_krb5"]
+        self.cpp_info.components["gssapi"].requires = ["krb5"]
+
+        self.cpp_info.components["gssrpc"].libs = ["gssrpc"]
+        self.cpp_info.components["gssrpc"].requires = ["gssapi"]
+
+        self.cpp_info.components["k5crypto"].libs = ["k5crypto"]
+        self.cpp_info.components["k5crypto"].requires = ["krb5support"]
+
+        self.cpp_info.components["kadm5clnt"].libs = ["kadm5clnt"]
+        self.cpp_info.components["kadm5clnt"].requires = ["gssrpc"]
+
+        self.cpp_info.components["kadm5clnt_mit"].libs = ["kadm5clnt_mit"]
+        self.cpp_info.components["kadm5clnt_mit"].requires = ["gssrpc"]
+
+        self.cpp_info.components["kadm5srv_mit"].libs = ["kadm5srv_mit"]
+        self.cpp_info.components["kadm5srv_mit"].requires = ["kdb5"]
+
+        self.cpp_info.components["kadm5srv"].libs = ["kadm5srv"]
+        self.cpp_info.components["kadm5srv"].requires = ["kdb5"]
+
+        self.cpp_info.components["kdb5"].libs = ["kdb5"]
+        self.cpp_info.components["kdb5"].requires = ["gssrpc"]
+
+        self.cpp_info.components["krad"].libs = ["krad"]
+        self.cpp_info.components["krad"].requires = ["krb5", "verto"]
+
+        self.cpp_info.components["krb5support"].libs = ["krb5support"]
+        self.cpp_info.components["krb5support"].requires = []
+
+        self.cpp_info.components["verto"].libs = ["verto"]
+        self.cpp_info.components["verto"].requires = []
+        
